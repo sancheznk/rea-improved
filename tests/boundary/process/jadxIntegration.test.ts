@@ -87,6 +87,52 @@ it("reuses immutable engine state while keeping each Evidence observation separa
       second.value.normalized_result,
     ).engine.heap_limit_mib,
   ).toBe(8192);
+  expect(
+    androidResultSchemas.inspect_android_class.parse(
+      second.value.normalized_result,
+    ).engine.worker_count,
+  ).toBe(1);
+  await provider.close();
+  await verifyCleanup(launches);
+});
+
+it("passes an explicitly selected JADX thread count through the load and Evidence", async () => {
+  const { service, apk, provider, environment, launches } = await setup();
+  const inspect = async () => {
+    const outcome = await service.execute("inspect_android_package", {
+      path: apk,
+    });
+    if (!outcome.ok) throw outcome.error;
+    return outcome.value;
+  };
+  const defaultResult = await inspect();
+  expect(
+    androidResultSchemas.inspect_android_package.parse(
+      defaultResult.normalized_result,
+    ).engine.worker_count,
+  ).toBe(1);
+  expect(launches).toHaveLength(1);
+
+  environment.REA_JADX_THREADS = "2";
+  const tunedResult = await inspect();
+  expect(
+    androidResultSchemas.inspect_android_package.parse(
+      tunedResult.normalized_result,
+    ).engine.worker_count,
+  ).toBe(2);
+  const tunedCalls = (tunedResult.raw_result as { calls: unknown[] }).calls;
+  const loadCall = tunedCalls.find(
+    (call): call is { operation: string; input: Record<string, unknown> } =>
+      typeof call === "object" &&
+      call !== null &&
+      "operation" in call &&
+      call.operation === "load_apk" &&
+      "input" in call &&
+      typeof call.input === "object" &&
+      call.input !== null,
+  );
+  expect(loadCall?.input).toMatchObject({ threads: 2, resources: "full" });
+  expect(launches).toHaveLength(2);
   await provider.close();
   await verifyCleanup(launches);
 });

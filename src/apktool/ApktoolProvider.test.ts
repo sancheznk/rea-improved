@@ -206,6 +206,23 @@ it("decodes resources with target identity, metadata, and strings", async () => 
   expect(result.coverage).toBe("complete");
 });
 
+it("binds decoded resources to the verified APK identity in the Evidence envelope", async () => {
+  const { command, root } = await writeApktoolStub(decodeStub());
+  const apk = await apkFixture(root);
+  const result = await providerOver(command).execute({
+    operation: "decode_android_resources",
+    input: { path: apk.path, include_strings: true },
+  });
+
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(result.value.subject).toEqual({
+    path: apk.path,
+    sha256: apk.sha256,
+    format: "apk",
+  });
+});
+
 it.each([
   {
     name: "malformed UTF-8",

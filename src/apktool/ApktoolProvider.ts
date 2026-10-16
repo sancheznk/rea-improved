@@ -800,6 +800,7 @@ export class ApktoolProvider {
           },
           provider,
           {
+            subject: { path: input.path, sha256, format: "apk" },
             limitations: [
               "Decoding skips smali (--no-src); Java-source recovery belongs to the JADX family",
               ...(input.locale !== undefined &&

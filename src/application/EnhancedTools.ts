@@ -78,6 +78,8 @@ type BatchDecompileItem = {
   readonly error?: ReturnType<typeof projectAnalysisError>;
 };
 
+const BATCH_DECOMPILE_MAX_IN_FLIGHT = 4;
+
 const isAnalysisCancellation = (
   error: AnalysisError,
 ): error is AnalysisCancelledError => error._tag === "AnalysisCancelledError";
@@ -88,6 +90,46 @@ const firstAnalysisCancellation = <Value>(
   for (const result of results)
     if (!result.ok && isAnalysisCancellation(result.error)) return result.error;
   return undefined;
+};
+
+/** Admit a small number of provider calls while retaining caller order. */
+const mapBoundedInOrder = async <Input, Output>(
+  items: readonly Input[],
+  map: (item: Input, index: number) => Promise<Output>,
+  options: {
+    readonly signal?: AbortSignal | undefined;
+    readonly stopWhen?: (output: Output) => boolean;
+  } = {},
+): Promise<Output[]> => {
+  const results = new Array<Output>(items.length);
+  let nextIndex = 0;
+  let stopAdmission = false;
+  const workers = Array.from(
+    { length: Math.min(BATCH_DECOMPILE_MAX_IN_FLIGHT, items.length) },
+    async () => {
+      while (
+        nextIndex < items.length &&
+        !stopAdmission &&
+        options.signal?.aborted !== true
+      ) {
+        const index = nextIndex++;
+        try {
+          const output = await map(items[index]!, index);
+          results[index] = output;
+          if (options.stopWhen?.(output) === true) stopAdmission = true;
+        } catch (cause: unknown) {
+          stopAdmission = true;
+          throw cause;
+        }
+      }
+    },
+  );
+  const settled = await Promise.allSettled(workers);
+  const rejection = settled.find(
+    (result): result is PromiseRejectedResult => result.status === "rejected",
+  );
+  if (rejection !== undefined) throw rejection.reason;
+  return results.slice(0, nextIndex);
 };
 
 /**
@@ -302,21 +344,29 @@ export class EnhancedTools {
     addresses: readonly string[],
     signal?: AbortSignal,
   ): EnhancedResult {
-    const resolutions = await Promise.all(
-      addresses.map(async (address) => {
+    const resolutions = await mapBoundedInOrder<string, BatchResolution>(
+      addresses,
+      async (address) => {
         const result = await resolveProcedureAddress(
           this.#call.bind(this),
           address,
           signal,
         );
         return { address, result };
-      }),
+      },
+      {
+        signal,
+        stopWhen: ({ result }) =>
+          !result.ok && isAnalysisCancellation(result.error),
+      },
     );
     const resolutionCancellation = firstAnalysisCancellation(
       resolutions.map(({ result }) => result),
     );
     if (resolutionCancellation !== undefined)
       return err(resolutionCancellation);
+    if (isAborted(signal))
+      return err(new AnalysisCancelledError("batch_decompile"));
 
     const identities = await this.#batchIdentities(resolutions, signal);
     const ready: BatchReadyItem[] = [];
@@ -324,12 +374,16 @@ export class EnhancedTools {
       if (!identity.ok) return err(identity.error);
       ready.push(identity.value);
     }
+    if (isAborted(signal))
+      return err(new AnalysisCancelledError("batch_decompile"));
     const decompilations = await this.#batchPseudocode(ready, signal);
     const items: BatchDecompileItem[] = [];
     for (const decompilation of decompilations) {
       if (!decompilation.ok) return err(decompilation.error);
       items.push(decompilation.value);
     }
+    if (isAborted(signal))
+      return err(new AnalysisCancelledError("batch_decompile"));
     const succeeded = items.filter(({ status }) => status === "ok").length;
     return ok({
       items,
@@ -343,8 +397,12 @@ export class EnhancedTools {
     resolutions: readonly BatchResolution[],
     signal?: AbortSignal,
   ): Promise<Result<BatchReadyItem, AnalysisCancelledError>[]> {
-    return Promise.all(
-      resolutions.map(async ({ address, result }) => {
+    return mapBoundedInOrder<
+      BatchResolution,
+      Result<BatchReadyItem, AnalysisCancelledError>
+    >(
+      resolutions,
+      async ({ address, result }) => {
         if (!result.ok)
           return ok({
             address,
@@ -365,7 +423,12 @@ export class EnhancedTools {
               procedure: identity.value,
             })
           : err(identity.error);
-      }),
+      },
+      {
+        signal,
+        stopWhen: (result) =>
+          !result.ok && isAnalysisCancellation(result.error),
+      },
     );
   }
 
@@ -373,8 +436,12 @@ export class EnhancedTools {
     ready: readonly BatchReadyItem[],
     signal?: AbortSignal,
   ): Promise<Result<BatchDecompileItem, AnalysisCancelledError>[]> {
-    return Promise.all(
-      ready.map(async ({ address, procedure, providerProcedure }) => {
+    return mapBoundedInOrder<
+      BatchReadyItem,
+      Result<BatchDecompileItem, AnalysisCancelledError>
+    >(
+      ready,
+      async ({ address, procedure, providerProcedure }) => {
         const result = await this.#call(
           "procedure_pseudo_code",
           { procedure: providerProcedure },
@@ -409,7 +476,12 @@ export class EnhancedTools {
                 pseudocode: result.value,
               };
         return ok(item);
-      }),
+      },
+      {
+        signal,
+        stopWhen: (result) =>
+          !result.ok && isAnalysisCancellation(result.error),
+      },
     );
   }
 

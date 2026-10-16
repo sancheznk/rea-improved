@@ -293,3 +293,77 @@ it("rejects unavailable retention, invalid selectors and cancellation before pro
   expect(parseMcpToolError(reply).error.code).toBe("capability_unavailable");
   expect(execute).not.toHaveBeenCalled();
 });
+
+it.skipIf(process.platform === "win32")(
+  "advertises and serves the typed Android manifest surface from retained Evidence without reopening the APK",
+  async () => {
+    const { provider, apk, launches } = await createJadxProtocolFixture();
+    const harness = await createApplicationMcpHarness({
+      serverOptions: { androidAnalysis: provider },
+    });
+    onTestFinished(harness.close);
+    const { client, session } = harness;
+    const catalog = (await client.listTools()).tools;
+    const viewTool = catalog.find(
+      (tool) => tool.name === "inspect_analysis_view",
+    );
+    if (viewTool?.inputSchema === undefined)
+      throw new Error("Missing inspect_analysis_view input schema");
+    const ajv = new Ajv2020({ strict: false, validateFormats: false });
+    const retainedId = `ev_${"a".repeat(64)}`;
+    expect(
+      ajv.validate(viewTool.inputSchema, {
+        source: { kind: "retained-evidence", evidence_id: retainedId },
+        view: { kind: "android-manifest-surface", offset: 0, limit: 16 },
+      }),
+      JSON.stringify(ajv.errors),
+    ).toBe(true);
+
+    const packageReply = await client.callTool({
+      name: "inspect_android_package",
+      arguments: { path: apk, detail: "summary" },
+    });
+    expect(packageReply.isError).not.toBe(true);
+    const packageReceipt = parseEvidence(packageReply.structuredContent);
+    const summary = androidPackageSummaryViewResultSchema.parse(
+      packageReceipt.normalized_result,
+    );
+    const parent = session.evidenceById(summary.parent_evidence_id);
+    if (parent === undefined)
+      throw new Error("Complete Android package Evidence was not retained");
+
+    const surfaceReply = await client.callTool({
+      name: "inspect_analysis_view",
+      arguments: {
+        source: {
+          kind: "retained-evidence",
+          evidence_id: summary.parent_evidence_id,
+        },
+        view: { kind: "android-manifest-surface", offset: 0, limit: 16 },
+      },
+    });
+    expect(surfaceReply.isError).not.toBe(true);
+    const surfaceReceipt = parseEvidence(surfaceReply.structuredContent);
+    const surface = analysisViewResultSchema.parse(
+      surfaceReceipt.normalized_result,
+    );
+    expect(surface).toMatchObject({
+      kind: "android-manifest-surface",
+      parent_evidence_id: summary.parent_evidence_id,
+      parent_operation: "inspect_android_package",
+      artifact: { sha256: parent.subject?.digest.sha256 },
+      item: {
+        package_name: "fixture",
+        manifest_package_name: "fixture",
+        application_declared: false,
+        component_counts: { total: 0 },
+        components: [],
+      },
+    });
+    expect(surfaceReceipt.evidence_links).toEqual([summary.parent_evidence_id]);
+    expect(launches).toHaveLength(1);
+    await harness.close();
+    await verifyJadxFixtureCleanup(launches);
+  },
+  30000,
+);

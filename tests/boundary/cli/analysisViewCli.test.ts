@@ -56,6 +56,107 @@ cliTest(
     expect(evidence.evidence_links).toEqual([parent.evidence_id]);
   },
 );
+
+cliTest(
+  "projects the typed Android manifest surface through the public CLI",
+  async ({ cli }) => {
+    const root = await createTestTempDirectory("rea-android-surface-cli-");
+    const input = join(root, "view.json");
+    const apk = "/fixtures/surface.apk";
+    const xml = `<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.example"><uses-sdk android:targetSdkVersion="33"/><uses-permission android:name="android.permission.INTERNET"/><application android:debuggable="false"><activity android:name=".MainActivity" android:exported="true"><intent-filter android:autoVerify="true"><action android:name="com.example.OPEN"/><category android:name="android.intent.category.DEFAULT"/><data android:scheme="https" android:host="example.com" android:pathPrefix="/open"/></intent-filter></activity></application></manifest>`;
+    const parent = createEvidence(
+      { path: apk, sha256: "a".repeat(64), format: "apk" },
+      { id: "jadx", name: "JADX", version: "0.7.1" },
+      {
+        operation: "inspect_android_package",
+        parameters: { path: apk },
+        result: {
+          engine: {
+            name: "jadx",
+            version: "0.7.1",
+            artifact_sha256: "b".repeat(64),
+            source_revision: null,
+            worker_count: 1,
+            heap_limit_mib: null,
+          },
+          package_name: "com.example",
+          version_name: null,
+          version_code: null,
+          min_sdk: null,
+          target_sdk: "33",
+          permissions: [],
+          manifest: {
+            status: "complete",
+            text: xml,
+            reported_total_bytes: Buffer.byteLength(xml, "utf8"),
+          },
+          class_count: 1,
+          resource_count: 0,
+          signature_verification: "not_performed",
+        },
+      },
+    );
+    await writeFile(
+      input,
+      JSON.stringify({
+        source: { kind: "inline", evidence: parent },
+        view: { kind: "android-manifest-surface", offset: 0, limit: 8 },
+      }),
+    );
+    const result = await cli.run({
+      arguments: ["inspect-analysis-view", input, "--json"],
+      environment: {
+        HOME: root,
+        XDG_CONFIG_HOME: root,
+        XDG_CACHE_HOME: root,
+      },
+    });
+    expect(result.exitCode, result.stdout).toBe(0);
+    const receipt = parseEvidence(result.json);
+    expect(receipt).toMatchObject({
+      operation: "inspect_analysis_view",
+      evidence_links: [parent.evidence_id],
+      normalized_result: {
+        kind: "android-manifest-surface",
+        parent_evidence_id: parent.evidence_id,
+        item: {
+          manifest_package_name: "com.example",
+          component_counts: { total: 1, explicitly_exported: 1 },
+          components: [
+            {
+              component_type: "activity",
+              declared_name: ".MainActivity",
+              exported: { state: "true", raw_value: "true" },
+              intent_filter_count: 1,
+              intent_filters: [
+                {
+                  auto_verify: "true",
+                  actions: ["com.example.OPEN"],
+                  categories: ["android.intent.category.DEFAULT"],
+                  unmodeled_children: [],
+                  data: [
+                    {
+                      scheme: "https",
+                      host: "example.com",
+                      path_prefix: "/open",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          declared_permissions: [
+            {
+              name: "android.permission.INTERNET",
+              declaration: "uses-permission",
+            },
+          ],
+        },
+      },
+    });
+  },
+);
+
 cliTest(
   "projects opted-in query names through compiled CLI without query values",
   async ({ cli }) => {

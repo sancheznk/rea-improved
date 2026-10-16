@@ -8,6 +8,11 @@ import { parseEvidence } from "../../domain/evidence.js";
 import { ok } from "../../domain/result.js";
 
 const identity = { id: "apktool", name: "Apktool", version: null };
+const apkSubject = {
+  path: "/targets/app.apk",
+  sha256: "a".repeat(64),
+  format: "apk" as const,
+};
 
 const execution = createAnalysisExecution(
   {
@@ -18,6 +23,7 @@ const execution = createAnalysisExecution(
     },
   },
   identity,
+  { subject: apkSubject },
 );
 
 const refusedPort: ApktoolResourceAnalysisPort = {
@@ -62,6 +68,12 @@ it("composes observed Evidence with the caller parameters inline", async () => {
   if (!result.ok) throw new Error(result.error.message);
   const evidence = parseEvidence(result.value);
   expect(evidence.provider).toEqual(identity);
+  expect(evidence.subject).toMatchObject({
+    name: "app.apk",
+    local_path: apkSubject.path,
+    format: apkSubject.format,
+    digest: { sha256: apkSubject.sha256 },
+  });
   expect(evidence.operation).toBe("decode_android_resources");
   expect(evidence.parameters).toEqual({
     path: "/targets/app.apk",

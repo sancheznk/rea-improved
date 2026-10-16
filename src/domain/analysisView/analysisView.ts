@@ -106,6 +106,8 @@ import {
   projectAndroidPackageView,
   androidPackageSummarySchema,
   androidViewRequestSchema,
+  androidManifestSurfaceViewRequestSchema,
+  androidManifestSurfaceItemSchema,
   androidManifestViewItemSchema,
 } from "./androidPackageView.js";
 import {
@@ -231,6 +233,7 @@ export const analysisViewRequestSchema = z.discriminatedUnion("kind", [
   managedViewRequestSchema,
   managedMembersViewRequestSchema,
   androidViewRequestSchema,
+  androidManifestSurfaceViewRequestSchema,
   apiSurfaceViewSchema,
   captureViewRequestSchema,
   qlogViewRequestSchema,
@@ -604,6 +607,13 @@ export const analysisViewResultSchema = z.discriminatedUnion("kind", [
     parent_operation: z.literal("inspect_android_package"),
   }),
   z.strictObject({
+    kind: z.literal("android-manifest-surface"),
+    view: androidManifestSurfaceViewRequestSchema,
+    item: androidManifestSurfaceItemSchema,
+    ...viewResultBase,
+    parent_operation: z.literal("inspect_android_package"),
+  }),
+  z.strictObject({
     kind: z.literal("dart-aot"),
     view: dartAotViewRequestSchema,
     items: z.array(z.string()),
@@ -699,6 +709,13 @@ export type UnsignedAnalysisView =
     >
   | Omit<
       Extract<AnalysisViewResult, { readonly kind: "android" }>,
+      "view_digest"
+    >
+  | Omit<
+      Extract<
+        AnalysisViewResult,
+        { readonly kind: "android-manifest-surface" }
+      >,
       "view_digest"
     >
   | Omit<

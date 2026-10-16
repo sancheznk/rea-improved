@@ -83,6 +83,7 @@ it("accepts a full JDK and canonicalizes the selected JAR", async () => {
     jar: await realpath(jar),
     java: join(javaHome, "bin", "java"),
     jvmArguments: [],
+    threads: 1,
   });
 });
 
@@ -131,6 +132,7 @@ it("configures heap and visible processors independently without forcing either"
       JAVA_HOME: javaHome,
       REA_JADX_HEAP_MIB: "8192",
       REA_JADX_ACTIVE_PROCESSOR_COUNT: "4",
+      REA_JADX_THREADS: "4",
     },
     "inspect_android_package",
   );
@@ -138,6 +140,7 @@ it("configures heap and visible processors independently without forcing either"
     "-Xmx8192m",
     "-XX:ActiveProcessorCount=4",
   ]);
+  expect(configuration.threads).toBe(4);
   await expect(
     resolveConfiguration(
       {
@@ -151,7 +154,11 @@ it("configures heap and visible processors independently without forcing either"
     _tag: "AnalysisCapabilityUnavailableError",
     reason: expect.stringContaining("32-bit"),
   });
-  for (const name of ["REA_JADX_HEAP_MIB", "REA_JADX_ACTIVE_PROCESSOR_COUNT"])
+  for (const name of [
+    "REA_JADX_HEAP_MIB",
+    "REA_JADX_ACTIVE_PROCESSOR_COUNT",
+    "REA_JADX_THREADS",
+  ])
     for (const value of ["", "0", "-1", "1.5", "8g", " 4", "9007199254740992"])
       await expect(
         resolveConfiguration(

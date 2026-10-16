@@ -95,6 +95,25 @@ explicit path or endpoint and do not need it.
 - Android APK code, classes, methods, or incoming references:
   `inspect_android_package`, then focused Android tools when advertised.
   Archive member inventory still uses the archive route above.
+
+For a declared Android component investigation, keep the package Evidence from a
+single retained APK session and use `inspect_analysis_view` with
+`kind: "android-manifest-surface"` to page exact component names, literal
+`android:exported` declarations, intent actions/categories/data, provider
+authorities, and requested permissions. Expand relative component names against
+the observed manifest package only as a labelled name-resolution step; retain the
+original spelling. Follow the selected exact class with
+`inspect_android_class`, then ask the caller to select an exact method/overload
+for `inspect_android_method` or `trace_android_references`. If Apktool is
+available, `decode_android_resources` independently decodes the binary manifest
+and resources; preserve both tool results and surface disagreements rather than
+choosing one silently. For DEX/native path context, use `inspect_artifact` and
+`project_android_application_graph` on the same APK digest; graph bridge
+candidates are path hypotheses, not resolved JNI bindings. Missing classes,
+partial manifests, omitted export values, and unmatched code remain unknown.
+Manifest declarations and static references alone do not establish reachability,
+permission enforcement, exploitability, or runtime behavior.
+
 - Managed PE/CLI assembly: `inspect_managed_artifact`.
 - Firmware image: `inspect_firmware_regions` when advertised. Use
   `extract_firmware` when extraction is requested, with a caller-selected new
@@ -327,6 +346,31 @@ For requests that span multiple features or subsystems, use a staged workflow:
 7. Keep a concise finding ledger linking each conclusion to Evidence IDs,
    confidence/evidence type, search boundary, and remaining unknowns. Update
    the shared index or investigation report so later passes can reuse results.
+
+## Make tools complement one another
+
+Choose a second tool because it answers a specific gap left by the first, not
+because it is another available tool. Prefer a different evidence source or
+authority over repeating the same query through another provider. Check
+`binary_session` availability and each result's coverage before choosing the
+next step; provider support is not uniform. Useful combinations include:
+
+| Investigation                        | Complementary sequence                                                                                                                                                                                         | Join and interpret                                                                                                                                                                                       |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JavaScript/Electron feature behavior | `analyze_javascript_application` → `trace_application_feature` or `trace_javascript_semantics` → browser/Electron/runtime observation only for unresolved execution questions → `reconcile_javascript_runtime` | Reuse the exact retained static Evidence. Reconcile only compatible Evidence with explicit location mappings; static reachability is not execution, and runtime correlation is not causal proof.         |
+| Android package                      | `inspect_android_package` / focused JADX class-method tools + `decode_android_resources` for manifest/resources; add caller-authorized ADB observation only when installed-device behavior is the question     | Keep all reports bound to the same APK digest. Decompiled code, decoded resources and device observations have different authorities; a missing resource or runtime observation is not proof of absence. |
+| Native executable                    | `open_binary` and a focused deep-provider query for pseudocode/calls + `inspect_binary_layout` or `inspect_with_objdump` for applicable file-layout, relocation, symbol or raw-disassembly facts               | Correlate only the exact input digest and compatible address basis. Preserve tool/provider limitations and raw locations; do not treat an offline fact as a decompiler result.                           |
+| Apple UI action                      | `trace_native_ui_action` composes `decode_interface_builder` with native dispatch metadata and joins the graphs                                                                                                | The workflow verifies that both sources identify the same target SHA-256 before joining; keep partial archive/dispatch coverage visible.                                                                 |
+| Firmware image                       | `inspect_firmware_regions` → caller-selected `extract_firmware` → inspect each returned executable child with the matching artifact/native tools                                                               | Retain each child digest and extraction lineage. Decompression does not establish an original byte range or runtime address; do not merge child offsets into firmware offsets.                           |
+
+For every combination, carry forward each source Evidence ID and exact artifact
+identity, label observations separately from derivations, and report
+disagreements and unresolved coverage rather than averaging them away. Use
+independent read-only operations in parallel only when they do not share mutable
+state or depend on one another. Never switch a selected deep provider or retry
+the same operation through a different provider just to hide a failure; report
+the typed failure and use a complementary source only when it can answer a
+different, well-defined question.
 
 Before finishing, revisit the original checklist. Mark each question as
 answered, partially answered, or unresolved based on its evidence; keep

@@ -53,12 +53,15 @@ export class JadxSession {
   #serverName: string | null = null;
   #serverVersion: string | null = null;
   #engineVersion: string | null = null;
+  readonly #threadCount: number;
 
   constructor(
     options: Omit<OwnedProviderProcessSpawnOptions, "runId" | "stdin">,
     launcher?: JadxLauncher,
+    threadCount = 1,
   ) {
     this.transport = new JadxMcpTransport(options, launcher);
+    this.#threadCount = threadCount;
   }
 
   /** Analyze one admitted immutable APK, checking producer identity and selectors. */
@@ -121,7 +124,7 @@ export class JadxSession {
         jadxLoadSchema.parse(
           await tools.json("load_apk", {
             path: snapshot,
-            threads: 1,
+            threads: this.#threadCount,
             resources: "full",
           }),
         );
@@ -137,7 +140,7 @@ export class JadxSession {
         artifact_sha256: jarHash,
         source_revision:
           jarHash === JADX_RELEASE.sha256 ? JADX_RELEASE.revision : null,
-        worker_count: 1,
+        worker_count: loaded.threads,
         heap_limit_mib:
           Math.floor(runtime.max_heap_bytes / (1024 * 1024)) || null,
       } as const;

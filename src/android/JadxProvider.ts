@@ -423,6 +423,7 @@ export class JadxProvider implements AndroidAnalysisPort {
         bridgeHash,
         java: configuration.java,
         arguments: configuration.jvmArguments,
+        threads: configuration.threads,
         options: [
           this.environment.JAVA_TOOL_OPTIONS,
           this.environment._JAVA_OPTIONS,
@@ -491,6 +492,7 @@ export class JadxProvider implements AndroidAnalysisPort {
             signal: workspaceSignal,
           },
           this.launcher,
+          configuration.threads,
         );
         retained = {
           key,

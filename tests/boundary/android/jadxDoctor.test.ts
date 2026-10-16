@@ -47,11 +47,13 @@ it("publishes JAVA_HOME alongside the JAR when the configured JAR validates", as
   const inspection = await inspectJadxProvider({
     REA_JADX_MCP_JAR: jar,
     JAVA_HOME: javaHome,
+    REA_JADX_THREADS: "2",
   });
 
   expect(inspection.registrationEnvironment).toEqual({
     REA_JADX_MCP_JAR: jar,
     JAVA_HOME: javaHome,
+    REA_JADX_THREADS: "2",
   });
 });
 

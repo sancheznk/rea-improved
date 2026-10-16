@@ -431,16 +431,25 @@ describe("enhanced MCP batches", () => {
       { length: 37 },
       (_, index) => `0x${index.toString(16)}`,
     );
+    const active = new Map<string, number>();
+    const peak = new Map<string, number>();
     const analysis: AnalysisOperationPort = {
       execute: async (name, arguments_) => {
-        if (name === "procedure_address")
-          return ok(String(arguments_.procedure));
-        if (name === "address_name")
-          return ok(`name for ${String(arguments_.address)}`);
-        if (name !== "procedure_pseudo_code")
+        const current = (active.get(name) ?? 0) + 1;
+        active.set(name, current);
+        peak.set(name, Math.max(peak.get(name) ?? 0, current));
+        try {
+          await new Promise<void>((resolve) => setImmediate(resolve));
+          if (name === "procedure_address")
+            return ok(String(arguments_.procedure));
+          if (name === "address_name")
+            return ok(`name for ${String(arguments_.address)}`);
+          if (name === "procedure_pseudo_code")
+            return ok(`pseudo for ${String(arguments_.procedure)}`);
           throw new Error(`Unexpected operation: ${name}`);
-        await new Promise((resolve) => setImmediate(resolve));
-        return ok(`pseudo for ${String(arguments_.procedure)}`);
+        } finally {
+          active.set(name, (active.get(name) ?? 1) - 1);
+        }
       },
     };
     const client = await connect(analysis);
@@ -468,6 +477,12 @@ describe("enhanced MCP batches", () => {
         failed: 0,
       },
     });
+    for (const operation of [
+      "procedure_address",
+      "address_name",
+      "procedure_pseudo_code",
+    ])
+      expect(peak.get(operation), `${operation} peak concurrency`).toBe(4);
   });
 
   it("returns ordered typed batch failures and zero counts for empty input", async () => {

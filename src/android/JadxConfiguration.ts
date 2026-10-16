@@ -20,6 +20,8 @@ import {
   JADX_JVM_OPTIONS_REMEDIATION,
   JADX_UNSUPPORTED_HOST_REMEDIATION,
   JADX_WINDOWS_NATIVE_REMEDIATION,
+  JADX_THREAD_COUNT_DEFAULT,
+  JADX_THREAD_COUNT_MAX,
 } from "./JadxRelease.js";
 
 const JAVA_MODULE_LISTING_TIMEOUT_MS = 10_000;
@@ -33,6 +35,7 @@ export interface JadxConfiguration {
   readonly jar: string;
   readonly java: string;
   readonly jvmArguments: readonly string[];
+  readonly threads: number;
 }
 
 type ConfigurationFailureCode =
@@ -169,6 +172,7 @@ export const inspectJadxAvailability = async (
         java_executable: configuration.java,
         jdk_compiler: true,
         jar_path: configuration.jar,
+        threads: configuration.threads,
       },
     };
   } catch (cause) {
@@ -225,7 +229,12 @@ const readJadxConfigurationInputs = async (
   const java = await resolveJava(environment, signal);
   await requireJavaHomeExecutable(environment.JAVA_HOME, java);
   signal?.throwIfAborted();
-  return { jar, java, jvmArguments: resolveJvmArguments(environment) };
+  return {
+    jar,
+    java,
+    jvmArguments: resolveJvmArguments(environment),
+    threads: resolveJadxThreads(environment),
+  };
 };
 
 const validateJadxConfigurationContents = async (
@@ -506,6 +515,27 @@ const resolveJvmArguments = (
     result.push(`${prefix}${value}${suffix}`);
   }
   return result;
+};
+
+const resolveJadxThreads = (
+  environment: Readonly<Record<string, string | undefined>>,
+): number => {
+  const name = "REA_JADX_THREADS";
+  const value = environment[name];
+  if (value === undefined) return JADX_THREAD_COUNT_DEFAULT;
+  const parsed = Number(value);
+  if (
+    !/^[1-9]\d*$/u.test(value) ||
+    !Number.isSafeInteger(parsed) ||
+    parsed > JADX_THREAD_COUNT_MAX
+  )
+    throw configurationFailure(
+      "open_options_invalid",
+      `${name} must be an integer from 1 through ${JADX_THREAD_COUNT_MAX}; received ${value}.`,
+      { setting: name, value, maximum: JADX_THREAD_COUNT_MAX },
+      "jvm_options",
+    );
+  return parsed;
 };
 
 const inspectJavaRuntime = async (

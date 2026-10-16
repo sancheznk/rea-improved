@@ -64,14 +64,14 @@ register("rea_jvm_status", () =>
     metadata_scope: "parsed_members",
   }),
 );
-register("load_apk", async ({ path }) => {
+register("load_apk", async ({ path, threads }) => {
   if (mode === "stall") await new Promise(() => {});
   return json({
     state: "LOADED",
     apk_path: mode === "wrong-apk" ? "/different.apk" : path,
     class_count: classes.length,
     resource_count: 1,
-    threads: 1,
+    threads,
     resources: "full",
   });
 });

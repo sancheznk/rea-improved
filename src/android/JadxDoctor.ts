@@ -49,6 +49,7 @@ export const inspectJadxProvider = async (
               "REA_JADX_ACTIVE_PROCESSOR_COUNT",
               environment.REA_JADX_ACTIVE_PROCESSOR_COUNT,
             ),
+            ...optionalEntry("REA_JADX_THREADS", environment.REA_JADX_THREADS),
           },
     checks: [configurationCheck(configured, availability, jarPath)],
   };

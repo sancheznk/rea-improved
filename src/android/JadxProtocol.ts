@@ -3,6 +3,7 @@ import { AnalysisOutputError } from "../domain/analysisErrorCore.js";
 import { jsonValueSchema } from "../domain/jsonValue.js";
 import type { AndroidOperation } from "../domain/android/androidAnalysis.js";
 import { dexDescriptorSchema } from "../domain/android/androidAnalysis.js";
+import { JADX_THREAD_COUNT_MAX } from "./JadxRelease.js";
 
 const count = z.number().int().nonnegative();
 /** Selector failures authored by REA's bridge, separate from arbitrary engine errors. */
@@ -24,7 +25,7 @@ export const jadxLoadSchema = z.object({
   apk_path: z.string(),
   class_count: count,
   resource_count: count,
-  threads: z.literal(1),
+  threads: z.number().int().min(1).max(JADX_THREAD_COUNT_MAX),
   resources: z.literal("full"),
 });
 export const jadxAppSchema = z.object({

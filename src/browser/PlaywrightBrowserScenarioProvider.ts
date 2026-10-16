@@ -185,6 +185,8 @@ const executeStep = async (input: {
   } else {
     try {
       await session.perform(action, signal);
+      if (requestCancelled())
+        outcome = { status: "cancelled", error: "scenario request cancelled" };
     } catch (cause: unknown) {
       outcome = {
         status: requestCancelled() ? "cancelled" : "failed",
@@ -325,23 +327,25 @@ const runScenario = async (
         ],
       }),
     });
-  if (options.signal?.aborted)
+  if (options.signal?.aborted) {
+    const partialObservation: BrowserScenarioPartialObservation = {
+      kind: "browser-scenario-observation",
+      capture: browserScenarioCaptureData({
+        session,
+        scenario,
+        startedAt,
+        steps,
+        cleanup: cleanupOutcome.cleanup,
+        limitations: [
+          "Scenario capture was cancelled; only observations collected before cancellation are included.",
+        ],
+      }),
+    };
     throw new AnalysisCancelledError(OPERATION, {
-      cause: options.signal?.reason,
-      partialObservation: {
-        kind: "browser-scenario-observation",
-        capture: browserScenarioCaptureData({
-          session,
-          scenario,
-          startedAt,
-          steps,
-          cleanup: cleanupOutcome.cleanup,
-          limitations: [
-            "Scenario capture completed, but the request was cancelled during final browser cleanup.",
-          ],
-        }),
-      },
+      cause: options.signal.reason,
+      partialObservation,
     });
+  }
   const completeness = globalCompleteness(scenario, session, steps);
   return browserScenarioCaptureSchema.parse({
     ...browserScenarioCaptureData({

@@ -34,6 +34,29 @@ One-shot CLI output remains complete. Older servers require the existing complet
 request after schema discovery. APK authenticity and runtime behavior remain
 unverified.
 
+For a structured view of that same retained manifest, request
+`view: {kind: "android-manifest-surface", offset: 0, limit: 64}`. The paged
+projection reports declared activities, aliases, services, receivers and
+providers; their literal `android:exported` value, component permission and
+intent-filter actions, categories, URI/MIME data, priority and auto-verify
+declarations; provider authorities/read/write permissions; alias target activity;
+requested permissions and hardware features; plus selected application flags
+and both JADX and manifest SDK/package declarations. Follow
+`coverage.next_offset` to page components. This gives an analyst an exact manifest
+route to follow up with `inspect_android_class`, `inspect_android_method` and
+`trace_android_references`, while the artifact inventory/application graph can
+separately supply DEX/native path relationships. Those sources are complementary,
+not proof of a resolved runtime route. The projection does not reopen the APK or
+launch another engine session. It preserves omitted and unrecognized attributes
+instead of resolving Android defaults, and does not call manifest declarations
+vulnerabilities or establish runtime reachability, permission enforcement or
+exploitability. A malformed retained XML document is reported as an output error
+rather than an empty surface; partial source coverage remains explicitly marked.
+The earlier `intent_filter_count` field remains present alongside detailed filter
+rows. Missing action/category names remain `null`; unfamiliar child tags are named
+in `unmodeled_children` and receive a caveat rather than being treated as decoded
+Android routing rules.
+
 ## Supply tools
 
 Use a **full JDK 17 or newer** (including its compiler module) and
@@ -76,7 +99,15 @@ service or an emulator. Set the path in the shell or MCP server environment:
 export REA_JADX_MCP_JAR=/absolute/path/jadx-headless-mcp-0.7.1-all.jar
 # Optional: select an existing JDK rather than java on PATH.
 export JAVA_HOME=/absolute/path/existing-jdk
+# Optional: only after measuring on this host (1–32; default 1).
+# export REA_JADX_THREADS=4
 ```
+
+`REA_JADX_THREADS` is opt-in; the default remains one worker to preserve existing
+resource use. Higher values may improve large-APK loading on suitable hosts, but
+can increase CPU and memory use and do not guarantee faster results. Measure
+against the same artifact and verify result facts before changing a deployment's
+setting.
 
 On Windows x64, use a REA package with its matching bundled Windows native
 controls **including owned protocol stdin support**. This Windows boundary is
